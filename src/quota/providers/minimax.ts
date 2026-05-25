@@ -44,7 +44,7 @@ class MiniMaxQuotaProvider implements QuotaProvider {
 
   init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
     const apiKeyRaw = config.apiKey as string | undefined;
-    this.apiKey = resolveEnvVar(apiKeyRaw);
+    this.apiKey = resolveEnvVar(apiKeyRaw) ?? process.env.MINIMAX_API_KEY;
   }
 
   async fetchQuota(): Promise<QuotaData | null> {

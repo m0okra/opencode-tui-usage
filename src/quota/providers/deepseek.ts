@@ -33,7 +33,7 @@ export class DeepSeekQuotaProvider implements QuotaProvider, BalanceProvider {
 
   init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
     const apiKeyRaw = config.apiKey as string | undefined;
-    this.apiKey = resolveEnvVar(apiKeyRaw);
+    this.apiKey = resolveEnvVar(apiKeyRaw) ?? process.env.DEEPSEEK_API_KEY;
   }
 
   /** DeepSeek 无 plan-based quota，返回 null */

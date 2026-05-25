@@ -17,8 +17,9 @@ export class OpenCodeGoQuotaProvider implements QuotaProvider {
 
   init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
     // 从配置中读取 cookie 和 workspaceId，支持 ${ENV_VAR} 格式
-    this.cookie = resolveEnvVar(config.cookie as string | undefined);
-    this.workspaceId = resolveEnvVar(config.workspaceId as string | undefined);
+    // 未配置时从约定环境变量保底读取
+    this.cookie = resolveEnvVar(config.cookie as string | undefined) ?? process.env.OPENCODE_GO_AUTH_COOKIE;
+    this.workspaceId = resolveEnvVar(config.workspaceId as string | undefined) ?? process.env.OPENCODE_GO_WORKSPACE_ID;
   }
 
   async fetchQuota(): Promise<QuotaData | null> {
