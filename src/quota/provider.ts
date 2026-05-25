@@ -1,4 +1,4 @@
-import type { QuotaData, ProviderConfig } from "./types.js";
+import type { BalanceData, QuotaData, ProviderConfig } from "./types.js";
 
 /**
  * 额度 Provider 接口
@@ -20,6 +20,15 @@ export interface QuotaProvider {
    * @returns 额度数据，获取失败返回 null
    */
   fetchQuota(): Promise<QuotaData | null>;
+}
+
+/**
+ * 余额 Provider 接口
+ * 按量计费（pay-as-you-go）的 Provider 需实现此接口
+ */
+export interface BalanceProvider {
+  /** 获取余额数据，失败返回 null */
+  fetchBalance(): Promise<BalanceData | null>;
 }
 
 /**

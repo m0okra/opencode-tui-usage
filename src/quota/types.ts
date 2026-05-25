@@ -9,6 +9,20 @@ export interface QuotaUsage {
 }
 
 /**
+ * 余额数据（适用于按量计费 Provider）
+ */
+export interface BalanceData {
+  /** 币种，如 "CNY"、"USD" */
+  currency: string;
+  /** 总余额 */
+  totalBalance: number;
+  /** 平台赠送余额（可选） */
+  grantedBalance?: number;
+  /** 充值余额（可选） */
+  toppedUpBalance?: number;
+}
+
+/**
  * 额度数据结构
  * 包含 Rolling(滚动周期)、Weekly(每周)、Monthly(每月) 三种维度的使用量
  */

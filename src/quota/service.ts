@@ -1,6 +1,7 @@
-import type { QuotaResult } from "./types.js";
-import type { QuotaProvider } from "./provider.js";
+import type { BalanceData, QuotaResult } from "./types.js";
+import type { BalanceProvider, QuotaProvider } from "./provider.js";
 import { readProviderConfig, getProviderConfig } from "./config.js";
+import { DeepSeekQuotaProvider } from "./providers/deepseek.js";
 import { MiniMaxCNQuotaProvider, MiniMaxIOQuotaProvider } from "./providers/minimax.js";
 import { OpenCodeGoQuotaProvider } from "./providers/opencode-go.js";
 
@@ -21,6 +22,7 @@ export class QuotaService {
 
   constructor() {
     // 注册支持的 Provider
+    this.registerProvider(new DeepSeekQuotaProvider());
     this.registerProvider(new MiniMaxCNQuotaProvider());
     this.registerProvider(new MiniMaxIOQuotaProvider());
     this.registerProvider(new OpenCodeGoQuotaProvider());
@@ -81,6 +83,25 @@ export class QuotaService {
   /** 获取所有已配置的 Provider 名称列表（从配置文件） */
   getConfiguredProviderNames(): string[] {
     return Object.keys(this.providerRegistry);
+  }
+
+  /**
+   * 当前活跃的 Provider 是否支持余额查询（按量计费）
+   */
+  supportsBalance(): boolean {
+    if (!this.activeProvider) return false;
+    return "fetchBalance" in this.activeProvider;
+  }
+
+  /**
+   * 获取当前 Provider 的余额数据（按量计费）
+   * @returns 余额数据，不支持或无余额时返回 null
+   */
+  async fetchBalance(): Promise<BalanceData | null> {
+    if (!this.activeProvider) return null;
+    const provider = this.activeProvider as unknown as BalanceProvider;
+    if (typeof provider.fetchBalance !== "function") return null;
+    return provider.fetchBalance();
   }
 
   /**

@@ -41,6 +41,35 @@ export interface ProgressBarProps {
   width?: number; // 进度条总宽度，默认 20
 }
 
+export interface TreeItemProps {
+  label: string;
+  value: string | number;
+  isLast?: boolean;
+  indent?: number;
+  labelColor?: string;
+}
+
+/**
+ * 树线条目组件
+ * 用 ├─ / └─ 前缀展示层级关系，增强信息组织感
+ * 例如：
+ *   ├─ label: value
+ *   └─ label: value
+ */
+export function TreeItem(props: TreeItemProps): JSX.Element {
+  const prefix = props.isLast ? "└─ " : "├─ ";
+  const indent = "  ".repeat(props.indent ?? 0);
+
+  return (
+    <box flexDirection="row" gap={0}>
+      <text fg="#555">{indent}{prefix}</text>
+      <text fg={props.labelColor ?? "#888"}>{props.label}</text>
+      <text fg="#888">:</text>
+      <text> {props.value}</text>
+    </box>
+  );
+}
+
 export interface CollapsibleProps {
   title: string;
   defaultOpen?: boolean;

@@ -15,6 +15,7 @@ export interface UsageViewProps {
     fetchQuota(): Promise<QuotaResult | null>;
     setActiveProvider(providerName: string): boolean;
     isProviderSupported(providerName: string): boolean;
+    supportsBalance(): boolean;
     getRegisteredProviderNames(): string[];
     getConfiguredProviderNames(): string[];
   };
@@ -71,6 +72,7 @@ export function UsageView(props: UsageViewProps): JSX.Element {
   const [refreshCountdown, setRefreshCountdown] = createSignal(REFRESH_INTERVAL);
   const [providerSupported, setProviderSupported] = createSignal(true);
   const [fetchError, setFetchError] = createSignal<string | null>(null);
+  const [isBalanceOnly, setIsBalanceOnly] = createSignal(false);
 
   // 请求 ID 计数器，用于处理竞态条件
   let currentRequestId = 0;
@@ -84,10 +86,19 @@ export function UsageView(props: UsageViewProps): JSX.Element {
 
     setLoading(true);
     setFetchError(null);
+    setIsBalanceOnly(false);
     const supported = props.quotaService.setActiveProvider(providerID);
     setProviderSupported(supported);
 
     if (!supported) {
+      setResult(null);
+      setLoading(false);
+      return;
+    }
+
+    // 按量计费的 provider 无 plan quota，跳过额度查询
+    if (props.quotaService.supportsBalance()) {
+      setIsBalanceOnly(true);
       setResult(null);
       setLoading(false);
       return;
@@ -175,101 +186,103 @@ export function UsageView(props: UsageViewProps): JSX.Element {
   });
 
   return (
-    <box flexDirection="column" gap={0}>
-      <text fg="#888">Provider: {currentProvider() ?? "Unknown"}</text>
-      <Show when={loading()}>
-        <>
-          <box flexDirection="column" gap={0}>
-            <box flexDirection="row" gap={1}>
-              <text fg="#6bcf7f">Rolling:</text>
-              <text fg="#888">Loading...</text>
-            </box>
-            <ProgressBar value={0} color="#6bcf7f" />
-          </box>
-          <box flexDirection="column" gap={0}>
-            <box flexDirection="row" gap={1}>
-              <text fg="#ffd93d">Weekly:</text>
-              <text fg="#888">Loading...</text>
-            </box>
-            <ProgressBar value={0} color="#ffd93d" />
-          </box>
-          <box flexDirection="column" gap={0}>
-            <box flexDirection="row" gap={1}>
-              <text fg="#4da6ff">Monthly:</text>
-              <text fg="#888">Loading...</text>
-            </box>
-            <ProgressBar value={0} color="#4da6ff" />
-          </box>
-          <text fg="#888">Refreshing...</text>
-        </>
-      </Show>
-      <Show when={!loading() && result()?.quota} keyed>
-        {(quota: QuotaData) => {
-          const refreshCount = result()?.refreshCount ?? 0;
-          return (
-            <>
-              <Show when={quota.rolling} keyed fallback={<text fg="#888">Rolling: N/A</text>}>
-                {(rolling: QuotaUsage) => (
-                  <box flexDirection="column" gap={0}>
-                    <box flexDirection="row" gap={1}>
-                      <text fg="#6bcf7f">Rolling:</text>
-                      <text>{rolling.usage}%</text>
-                      <text fg="#888">reset {rolling.reset}</text>
-                    </box>
-                    <ProgressBar
-                      value={rolling.usage}
-                      color="#6bcf7f"
-                    />
-                  </box>
-                )}
-              </Show>
-              <Show when={quota.weekly} keyed fallback={<text fg="#888">Weekly: N/A</text>}>
-                {(weekly: QuotaUsage) => (
-                  <box flexDirection="column" gap={0}>
-                    <box flexDirection="row" gap={1}>
-                      <text fg="#ffd93d">Weekly:</text>
-                      <text>{weekly.usage}%</text>
-                      <text fg="#888">reset {weekly.reset}</text>
-                    </box>
-                    <ProgressBar
-                      value={weekly.usage}
-                      color="#ffd93d"
-                    />
-                  </box>
-                )}
-              </Show>
-              <box flexDirection="column" gap={0}>
-                <box flexDirection="row" gap={1}>
-                  <text fg="#4da6ff">Monthly:</text>
-                  {quota.monthly ? (
-                    <>
-                      <text>{quota.monthly.usage}%</text>
-                      <text fg="#888">reset {quota.monthly.reset}</text>
-                    </>
-                  ) : (
-                    <>
-                      <text fg="#888">0%</text>
-                      <text fg="#888">reset ∞</text>
-                    </>
-                  )}
-                </box>
-                <ProgressBar
-                  value={quota.monthly?.usage ?? 0}
-                  color="#4da6ff"
-                />
+    <Show when={!isBalanceOnly()}>
+      <box flexDirection="column" gap={0}>
+        <text fg="#888">Provider: {currentProvider() ?? "Unknown"}</text>
+        <Show when={loading()}>
+          <>
+            <box flexDirection="column" gap={0}>
+              <box flexDirection="row" gap={1}>
+                <text fg="#6bcf7f">Rolling:</text>
+                <text fg="#888">Loading...</text>
               </box>
-              <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{refreshCount}</text>
-            </>
-          );
-        }}
-      </Show>
-      <Show when={!loading() && (!result() || !result()?.quota)}>
-        <EmptyState
-          provider={currentProvider()}
-          supported={providerSupported()}
-          error={fetchError()}
-        />
-      </Show>
-    </box>
+              <ProgressBar value={0} color="#6bcf7f" />
+            </box>
+            <box flexDirection="column" gap={0}>
+              <box flexDirection="row" gap={1}>
+                <text fg="#ffd93d">Weekly:</text>
+                <text fg="#888">Loading...</text>
+              </box>
+              <ProgressBar value={0} color="#ffd93d" />
+            </box>
+            <box flexDirection="column" gap={0}>
+              <box flexDirection="row" gap={1}>
+                <text fg="#4da6ff">Monthly:</text>
+                <text fg="#888">Loading...</text>
+              </box>
+              <ProgressBar value={0} color="#4da6ff" />
+            </box>
+            <text fg="#888">Refreshing...</text>
+          </>
+        </Show>
+        <Show when={!loading() && result()?.quota} keyed>
+          {(quota: QuotaData) => {
+            const refreshCount = result()?.refreshCount ?? 0;
+            return (
+              <>
+                <Show when={quota.rolling} keyed fallback={<text fg="#888">Rolling: N/A</text>}>
+                  {(rolling: QuotaUsage) => (
+                    <box flexDirection="column" gap={0}>
+                      <box flexDirection="row" gap={1}>
+                        <text fg="#6bcf7f">Rolling:</text>
+                        <text>{rolling.usage}%</text>
+                        <text fg="#888">reset {rolling.reset}</text>
+                      </box>
+                      <ProgressBar
+                        value={rolling.usage}
+                        color="#6bcf7f"
+                      />
+                    </box>
+                  )}
+                </Show>
+                <Show when={quota.weekly} keyed fallback={<text fg="#888">Weekly: N/A</text>}>
+                  {(weekly: QuotaUsage) => (
+                    <box flexDirection="column" gap={0}>
+                      <box flexDirection="row" gap={1}>
+                        <text fg="#ffd93d">Weekly:</text>
+                        <text>{weekly.usage}%</text>
+                        <text fg="#888">reset {weekly.reset}</text>
+                      </box>
+                      <ProgressBar
+                        value={weekly.usage}
+                        color="#ffd93d"
+                      />
+                    </box>
+                  )}
+                </Show>
+                <box flexDirection="column" gap={0}>
+                  <box flexDirection="row" gap={1}>
+                    <text fg="#4da6ff">Monthly:</text>
+                    {quota.monthly ? (
+                      <>
+                        <text>{quota.monthly.usage}%</text>
+                        <text fg="#888">reset {quota.monthly.reset}</text>
+                      </>
+                    ) : (
+                      <>
+                        <text fg="#888">0%</text>
+                        <text fg="#888">reset ∞</text>
+                      </>
+                    )}
+                  </box>
+                  <ProgressBar
+                    value={quota.monthly?.usage ?? 0}
+                    color="#4da6ff"
+                  />
+                </box>
+                <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{refreshCount}</text>
+              </>
+            );
+          }}
+        </Show>
+        <Show when={!loading() && (!result() || !result()?.quota)}>
+          <EmptyState
+            provider={currentProvider()}
+            supported={providerSupported()}
+            error={fetchError()}
+          />
+        </Show>
+      </box>
+    </Show>
   );
 }

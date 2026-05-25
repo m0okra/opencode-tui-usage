@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { JSX } from "solid-js";
 import { createSignal, createEffect, Show, For } from "solid-js";
-import { ProgressBar } from "./components.jsx";
+import { TreeItem } from "./components.jsx";
 import { formatNumber, formatCost } from "./formatters.js";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { AssistantMessage } from "@opencode-ai/sdk/v2";
@@ -22,17 +22,6 @@ export interface TokenStats {
 export interface TokensUsageViewProps {
   api: TuiPluginApi;
   sessionId: string;
-}
-
-/** 内联指标组件：显示 "标签: 值" 格式 */
-function InlineMetric(props: { label: string; value: string; color: string }) {
-  return (
-    <box flexDirection="row" gap={0}>
-      <text fg={props.color}>{props.label}</text>
-      <text fg="#888">:</text>
-      <text>{props.value}</text>
-    </box>
-  );
 }
 
 /**
@@ -141,17 +130,11 @@ export function TokensUsageView(props: TokensUsageViewProps): JSX.Element {
 
       <Show when={!isLoading() && stats().length > 0}>
         <box flexDirection="column" gap={0}>
-          <box flexDirection="row" gap={2}>
-            <InlineMetric label="In" value={formatNumber(totals()?.input ?? 0)} color="#6bcf7f" />
-            <InlineMetric label="Out" value={formatNumber(totals()?.output ?? 0)} color="#fd79a8" />
-            <InlineMetric label="Rea" value={formatNumber(totals()?.reasoning ?? 0)} color="#fdcb6e" />
-          </box>
-          <box flexDirection="row" gap={2}>
-            <InlineMetric label="Cache" value={`R:${formatNumber(totals()?.cacheRead ?? 0)} W:${formatNumber(totals()?.cacheWrite ?? 0)}`} color="#00cec9" />
-          </box>
-          <box flexDirection="row" gap={2}>
-            <InlineMetric label="Cost" value={formatCost(totals()?.cost ?? 0)} color="#ffd93d" />
-          </box>
+          <TreeItem label="Input" value={formatNumber(totals()?.input ?? 0)} labelColor="#6bcf7f" />
+          <TreeItem label="Output" value={formatNumber(totals()?.output ?? 0)} labelColor="#fd79a8" />
+          <TreeItem label="Reasoning" value={formatNumber(totals()?.reasoning ?? 0)} labelColor="#fdcb6e" />
+          <TreeItem label="Cache" value={`R:${formatNumber(totals()?.cacheRead ?? 0)} W:${formatNumber(totals()?.cacheWrite ?? 0)}`} labelColor="#00cec9" />
+          <TreeItem label="Cost" value={formatCost(totals()?.cost ?? 0)} isLast labelColor="#ffd93d" />
         </box>
       </Show>
 
@@ -159,13 +142,12 @@ export function TokensUsageView(props: TokensUsageViewProps): JSX.Element {
         <For each={stats()}>
           {(stat) => (
             <box flexDirection="column" gap={0}>
-              <box flexDirection="row" gap={1}>
-                <text fg="#74b9ff">{stat.modelID || "unknown"}</text>
-                <text fg="#ffd93d">· {formatCost(stat.totalCost)}</text>
-              </box>
-              <text fg="#888">
-                I:{formatNumber(stat.input)} O:{formatNumber(stat.output)} R:{formatNumber(stat.reasoning)} C:{formatNumber(stat.cacheRead + stat.cacheWrite)}({stat.messageCount})
-              </text>
+              <text fg="#74b9ff">{stat.modelID || "unknown"}:</text>
+              <TreeItem indent={1} label="Input" value={formatNumber(stat.input)} labelColor="#6bcf7f" />
+              <TreeItem indent={1} label="Output" value={formatNumber(stat.output)} labelColor="#fd79a8" />
+              <TreeItem indent={1} label="Reasoning" value={formatNumber(stat.reasoning)} labelColor="#fdcb6e" />
+              <TreeItem indent={1} label="Cache" value={formatNumber(stat.cacheRead + stat.cacheWrite)} labelColor="#00cec9" />
+              <TreeItem indent={1} label="Cost" value={`${formatCost(stat.totalCost)} (${stat.messageCount} msg)`} isLast labelColor="#ffd93d" />
             </box>
           )}
         </For>
