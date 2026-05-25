@@ -33,7 +33,7 @@ const tui: TuiPlugin = async (api) => {
                 sessionId={_props.session_id}
               />
               <Show when={!isBalanceOnly}>
-                <Collapsible title="Usage Quota" color="#6bcf7f" defaultOpen={false}>
+                <Collapsible title="Usage Quota" color="#6bcf7f" defaultOpen={true}>
                   <UsageView
                     quotaService={quotaService}
                     api={api}
@@ -41,7 +41,7 @@ const tui: TuiPlugin = async (api) => {
                   />
                 </Collapsible>
               </Show>
-              <Collapsible title="Session" color="#ffd93d" defaultOpen={false}>
+              <Collapsible title="Session" color="#ffd93d" defaultOpen={true}>
                 <SessionInfoView api={api} sessionId={_props.session_id} />
               </Collapsible>
               <Collapsible title="Usage Tokens" color="#a29bfe" defaultOpen={false}>
