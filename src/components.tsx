@@ -77,21 +77,36 @@ export interface CollapsibleProps {
   children: JSX.Element;
 }
 
+/** 持久化折叠状态，防止侧边栏重渲染时复位 */
+const collapseState = new Map<string, boolean>();
+
 /**
  * 可折叠区域组件
  * 标题栏可点击切换展开/折叠状态
  * - ▶ 收起状态（点击展开）
  * - ▼ 展开状态（点击收起）
+ *
+ * 折叠状态持久化在模块级 Map 中，组件重新挂载时自动恢复。
  */
 export function Collapsible(props: CollapsibleProps): JSX.Element {
-  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
+  const [isOpen, setIsOpen] = createSignal(
+    collapseState.get(props.title) ?? props.defaultOpen ?? true
+  );
+
+  const toggle = () => {
+    setIsOpen((v) => {
+      const next = !v;
+      collapseState.set(props.title, next);
+      return next;
+    });
+  };
 
   return (
     <box flexDirection="column" gap={0}>
       <box
         flexDirection="row"
         gap={1}
-        onMouseDown={() => setIsOpen((v) => !v)}
+        onMouseDown={toggle}
       >
         <text fg="#888">{() => (isOpen() ? "▼ " : "▶ ")}</text>
         <text fg={props.color}>{props.title}</text>
