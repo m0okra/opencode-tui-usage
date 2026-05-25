@@ -34,7 +34,7 @@ export function BalanceView(props: BalanceViewProps): JSX.Element {
   const [currentProvider, setCurrentProvider] = createSignal<string | null>(null);
   const [hasBalance, setHasBalance] = createSignal(false);
   const [refreshCountdown, setRefreshCountdown] = createSignal(REFRESH_INTERVAL);
-  let refreshCount = 0;
+  const [refreshCount, setRefreshCount] = cachedSignal<number>("balance.refreshCount", 0);
 
   // 请求 ID 计数器，用于处理竞态条件
   let currentRequestId = 0;
@@ -118,7 +118,7 @@ export function BalanceView(props: BalanceViewProps): JSX.Element {
   const doFetch = () => {
     lastRefreshTime = Date.now();
     const requestId = ++currentRequestId;
-    refreshCount++;
+    setRefreshCount(refreshCount() + 1);
     setLoading(true);
 
     props.quotaService.fetchBalance().then((data) => {
@@ -148,7 +148,7 @@ export function BalanceView(props: BalanceViewProps): JSX.Element {
                 ¥{data.totalBalance.toFixed(2)} ({data.currency})
               </text>
             </box>
-            <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{refreshCount}</text>
+            <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{refreshCount()}</text>
           </box>
         )}
       </Show>
