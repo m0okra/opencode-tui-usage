@@ -33,6 +33,7 @@ src/
 ├── tui.tsx              # 插件入口，注册 sidebar_content slot
 ├── formatters.ts         # 格式化工具 (formatNumber, formatCost, formatDuration)
 ├── components.tsx         # 通用 UI 组件 (LabelValue, Title, ProgressBar, Collapsible, TreeItem)
+├── utils.ts             # 工具函数 (findLastAssistantMessage, cachedSignal)
 ├── balance-view.tsx     # Balance 余额组件（按量计费 provider）
 ├── usage.tsx             # Usage Quota 组件（plan 型 provider）
 ├── session-info.tsx     # Session Info 组件（含 Context 合并展示）
@@ -66,6 +67,35 @@ src/
 - 数据展示组件内使用 `createSignal` + `createEffect` 实现响应式
 - UI 渲染放在 `createEffect` 回调外部，依赖 signal 自动更新
 - 使用 `<Show>` 控制条件渲染，不要用三元表达式
+
+### ⚠️ 侧边栏组件重要约束
+
+`sidebar_content` 是回调函数（非 Solid 组件），每次消息更新**重建整个组件树**。所有 `createSignal` 状态归零。
+
+**规则 1：数据 signal 必须使用 `cachedSignal`**
+
+```typescript
+// ❌ 会丢失（重挂时重置）
+const [data, setData] = createSignal<...>(null);
+
+// ✅ 不会丢失（从模块级缓存恢复）
+const [data, setData] = cachedSignal<...>("unique.key", null);
+```
+
+`cachedSignal` 定义在 `utils.ts`，自动将数据同步到模块级 Map，组件重挂载时从缓存恢复，避免 UI 闪烁和重复请求。
+
+**规则 2：禁止在渲染路径中执行副作用**
+
+```typescript
+// ❌ 反模式（sidebar_content 渲染时执行）
+const isBalanceOnly = quotaService.setActiveProvider(id) && ...;
+
+// ✅ 正确（放入 createEffect）
+createEffect(() => {
+  quotaService.setActiveProvider(id);
+  setResult(...);
+});
+```
 
 ### Context Tokens 计算方式
 
