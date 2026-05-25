@@ -1,4 +1,5 @@
 /** @jsxImportSource @opentui/solid */
+import { createSignal, Show } from "solid-js";
 import type { JSX } from "solid-js";
 
 export interface LabelValueProps {
@@ -38,6 +39,39 @@ export interface ProgressBarProps {
   value: number; // 0-100 百分比
   color?: string;
   width?: number; // 进度条总宽度，默认 20
+}
+
+export interface CollapsibleProps {
+  title: string;
+  defaultOpen?: boolean;
+  color?: string;
+  children: JSX.Element;
+}
+
+/**
+ * 可折叠区域组件
+ * 标题栏可点击切换展开/折叠状态
+ * - ▶ 收起状态（点击展开）
+ * - ▼ 展开状态（点击收起）
+ */
+export function Collapsible(props: CollapsibleProps): JSX.Element {
+  const [isOpen, setIsOpen] = createSignal(props.defaultOpen ?? true);
+
+  return (
+    <box flexDirection="column" gap={0}>
+      <box
+        flexDirection="row"
+        gap={1}
+        onMouseDown={() => setIsOpen((v) => !v)}
+      >
+        <text fg="#888">{() => (isOpen() ? "▼ " : "▶ ")}</text>
+        <text fg={props.color}>{props.title}</text>
+      </box>
+      <Show when={isOpen()}>
+        {props.children}
+      </Show>
+    </box>
+  );
 }
 
 /**

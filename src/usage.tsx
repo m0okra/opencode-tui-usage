@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import type { JSX } from "solid-js";
-import { createSignal, createEffect, onCleanup } from "solid-js";
-import { Title, ProgressBar } from "./components.jsx";
+import { createSignal, createEffect, onCleanup, Show } from "solid-js";
+import { ProgressBar } from "./components.jsx";
 import { formatDuration } from "./formatters.js";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
-import type { QuotaResult } from "./quota/types.js";
+import type { QuotaResult, QuotaData, QuotaUsage } from "./quota/types.js";
 import { findLastAssistantMessage } from "./utils.js";
 
 /** 额度刷新间隔（秒） */
@@ -27,8 +27,6 @@ interface EmptyStateProps {
   provider: string | null;
   supported: boolean;
   error: string | null;
-  registeredProviders: string[];
-  configuredProviders: string[];
 }
 
 /**
@@ -99,8 +97,10 @@ export function UsageView(props: UsageViewProps): JSX.Element {
       if (requestId !== currentRequestId) return;
       if (data && data.quota) {
         setResult(data);
+        setFetchError(null);
       } else {
         setResult(null);
+        setFetchError("Provider returned no quota data");
       }
       setLoading(false);
     }).catch((error) => {
@@ -150,6 +150,7 @@ export function UsageView(props: UsageViewProps): JSX.Element {
     if (!providerID) {
       setResult(null);
       setLoading(false);
+      setFetchError(null);
       setProviderSupported(false);
       return;
     }
@@ -175,9 +176,8 @@ export function UsageView(props: UsageViewProps): JSX.Element {
 
   return (
     <box flexDirection="column" gap={0}>
-      <Title text="Usage Quota" color="#6bcf7f" />
       <text fg="#888">Provider: {currentProvider() ?? "Unknown"}</text>
-      {loading() ? (
+      <Show when={loading()}>
         <>
           <box flexDirection="column" gap={0}>
             <box flexDirection="row" gap={1}>
@@ -202,69 +202,74 @@ export function UsageView(props: UsageViewProps): JSX.Element {
           </box>
           <text fg="#888">Refreshing...</text>
         </>
-      ) : result() && result()!.quota ? (
-        <>
-          {result()!.quota.rolling ? (
-            <box flexDirection="column" gap={0}>
-              <box flexDirection="row" gap={1}>
-                <text fg="#6bcf7f">Rolling:</text>
-                <text>{result()!.quota.rolling!.usage}%</text>
-                <text fg="#888">reset {result()!.quota.rolling!.reset}</text>
+      </Show>
+      <Show when={!loading() && result()?.quota} keyed>
+        {(quota: QuotaData) => {
+          const refreshCount = result()?.refreshCount ?? 0;
+          return (
+            <>
+              <Show when={quota.rolling} keyed fallback={<text fg="#888">Rolling: N/A</text>}>
+                {(rolling: QuotaUsage) => (
+                  <box flexDirection="column" gap={0}>
+                    <box flexDirection="row" gap={1}>
+                      <text fg="#6bcf7f">Rolling:</text>
+                      <text>{rolling.usage}%</text>
+                      <text fg="#888">reset {rolling.reset}</text>
+                    </box>
+                    <ProgressBar
+                      value={rolling.usage}
+                      color="#6bcf7f"
+                    />
+                  </box>
+                )}
+              </Show>
+              <Show when={quota.weekly} keyed fallback={<text fg="#888">Weekly: N/A</text>}>
+                {(weekly: QuotaUsage) => (
+                  <box flexDirection="column" gap={0}>
+                    <box flexDirection="row" gap={1}>
+                      <text fg="#ffd93d">Weekly:</text>
+                      <text>{weekly.usage}%</text>
+                      <text fg="#888">reset {weekly.reset}</text>
+                    </box>
+                    <ProgressBar
+                      value={weekly.usage}
+                      color="#ffd93d"
+                    />
+                  </box>
+                )}
+              </Show>
+              <box flexDirection="column" gap={0}>
+                <box flexDirection="row" gap={1}>
+                  <text fg="#4da6ff">Monthly:</text>
+                  {quota.monthly ? (
+                    <>
+                      <text>{quota.monthly.usage}%</text>
+                      <text fg="#888">reset {quota.monthly.reset}</text>
+                    </>
+                  ) : (
+                    <>
+                      <text fg="#888">0%</text>
+                      <text fg="#888">reset ∞</text>
+                    </>
+                  )}
+                </box>
+                <ProgressBar
+                  value={quota.monthly?.usage ?? 0}
+                  color="#4da6ff"
+                />
               </box>
-              <ProgressBar
-                value={result()!.quota.rolling!.usage}
-                color="#6bcf7f"
-              />
-            </box>
-          ) : (
-            <text fg="#888">Rolling: N/A</text>
-          )}
-          {result()!.quota.weekly ? (
-            <box flexDirection="column" gap={0}>
-              <box flexDirection="row" gap={1}>
-                <text fg="#ffd93d">Weekly:</text>
-                <text>{result()!.quota.weekly!.usage}%</text>
-                <text fg="#888">reset {result()!.quota.weekly!.reset}</text>
-              </box>
-              <ProgressBar
-                value={result()!.quota.weekly!.usage}
-                color="#ffd93d"
-              />
-            </box>
-          ) : (
-            <text fg="#888">Weekly: N/A</text>
-          )}
-          <box flexDirection="column" gap={0}>
-            <box flexDirection="row" gap={1}>
-              <text fg="#4da6ff">Monthly:</text>
-              {result()!.quota.monthly ? (
-                <>
-                  <text>{result()!.quota.monthly!.usage}%</text>
-                  <text fg="#888">reset {result()!.quota.monthly!.reset}</text>
-                </>
-              ) : (
-                <>
-                  <text fg="#888">0%</text>
-                  <text fg="#888">reset ∞</text>
-                </>
-              )}
-            </box>
-            <ProgressBar
-              value={result()!.quota.monthly?.usage ?? 0}
-              color="#4da6ff"
-            />
-          </box>
-          <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{result()!.refreshCount}</text>
-        </>
-      ) : (
+              <text fg="#888">{formatDuration(refreshCountdown())} Refresh #{refreshCount}</text>
+            </>
+          );
+        }}
+      </Show>
+      <Show when={!loading() && (!result() || !result()?.quota)}>
         <EmptyState
           provider={currentProvider()}
           supported={providerSupported()}
           error={fetchError()}
-          registeredProviders={props.quotaService.getRegisteredProviderNames()}
-          configuredProviders={props.quotaService.getConfiguredProviderNames()}
         />
-      )}
+      </Show>
     </box>
   );
 }

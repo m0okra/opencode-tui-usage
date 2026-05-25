@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
+import { Collapsible } from "./components.jsx";
 import { UsageView } from "./usage.jsx";
 import { SessionInfoView } from "./session-info.jsx";
 import { TokensUsageView } from "./tokens-usage.jsx";
@@ -15,29 +16,36 @@ const tui: TuiPlugin = async (api) => {
     order: 150,
     slots: {
       sidebar_content(_ctx: unknown, _props: { session_id: string }) {
-        return (
-          <box gap={0}>
-            <UsageView
-              quotaService={quotaService}
-              api={api}
-              sessionId={_props.session_id}
-            />
-            <SessionInfoView api={api} sessionId={_props.session_id} />
-            <ContextUsageView
-              api={api}
-              sessionId={_props.session_id}
-            />
-            <TokensUsageView
-              api={api}
-              sessionId={_props.session_id}
-            />
-          </box>
-        );
+          return (
+            <box gap={0}>
+              <Collapsible title="Usage Quota" color="#6bcf7f" defaultOpen={false}>
+                <UsageView
+                  quotaService={quotaService}
+                  api={api}
+                  sessionId={_props.session_id}
+                />
+              </Collapsible>
+              <Collapsible title="Session" color="#ffd93d" defaultOpen={false}>
+                <SessionInfoView api={api} sessionId={_props.session_id} />
+              </Collapsible>
+              <Collapsible title="Context" color="#a29bfe" defaultOpen={false}>
+                <ContextUsageView
+                  api={api}
+                  sessionId={_props.session_id}
+                />
+              </Collapsible>
+              <Collapsible title="Usage Tokens" color="#a29bfe" defaultOpen={false}>
+                <TokensUsageView
+                  api={api}
+                  sessionId={_props.session_id}
+                />
+              </Collapsible>
+            </box>
+          );
       },
     },
   });
 
-  console.log(`[${id}] Plugin registered`);
 };
 
 const plugin: TuiPluginModule & { id: string } = {

@@ -11,6 +11,12 @@ export interface ContextUsageViewProps {
   sessionId: string;
 }
 
+interface ContextData {
+  tokens: number;
+  limit: number;
+  percent: number;
+}
+
 /**
  * Context Usage 视图组件
  * 显示当前会话最新一条 assistant 消息的 context tokens 使用情况
@@ -21,11 +27,7 @@ export interface ContextUsageViewProps {
  * 注意：AI 回复期间 tokens 可能为 0，此时跳过该消息
  */
 export function ContextUsageView(props: ContextUsageViewProps): JSX.Element {
-  const [contextData, setContextData] = createSignal<{
-    tokens: number;
-    limit: number;
-    percent: number;
-  } | null>(null);
+  const [contextData, setContextData] = createSignal<ContextData | null>(null);
 
   createEffect(() => {
     const sessionId = props.sessionId;
@@ -36,12 +38,9 @@ export function ContextUsageView(props: ContextUsageViewProps): JSX.Element {
       return;
     }
 
-    let latestTokens = 0;
-    let latestTime = -Infinity;
-    let limit = 0;
-
-    // 遍历所有消息，找到最新一条有有效 tokens 的 assistant 消息
-    for (const msg of messages) {
+    // 反向遍历，找到最新一条有有效 tokens 的 assistant 消息（early exit）
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
       if (msg.role !== "assistant" || !msg.tokens) continue;
 
       // 计算总 tokens（input + output + reasoning + cache）
@@ -55,42 +54,35 @@ export function ContextUsageView(props: ContextUsageViewProps): JSX.Element {
       // AI 回复期间 tokens 可能为 0，跳过
       if (tokens <= 0) continue;
 
-      // 使用消息完成时间或创建时间来判断新旧
-      const time = msg.time.completed ?? msg.time.created;
-      if (time > latestTime) {
-        latestTime = time;
-        latestTokens = tokens;
+      // 从 provider 列表中查找对应模型的 context limit
+      const provider = props.api.state.provider.find((p) => p.id === msg.providerID);
+      if (!provider) continue;
 
-        // 从 provider 列表中查找对应模型的 context limit
-        const provider = props.api.state.provider.find((p) => p.id === msg.providerID);
-        if (!provider) {
-          continue;
-        }
-        const model = provider.models[msg.modelID];
-        limit = model?.limit?.context ?? 0;
-      }
-    }
+      const model = provider.models[msg.modelID];
+      const limit = model?.limit?.context ?? 0;
+      if (limit === 0) continue;
 
-    if (latestTokens === 0 || limit === 0) {
-      setContextData(null);
+      const percent = Math.min(100, (tokens / limit) * 100);
+      setContextData({ tokens, limit, percent });
       return;
     }
 
-    const percent = Math.min(100, (latestTokens / limit) * 100);
-    setContextData({ tokens: latestTokens, limit, percent });
+    setContextData(null);
   });
 
   return (
-    <Show when={contextData()} fallback={<></>}>
-      <box flexDirection="column" gap={0}>
-        <box flexDirection="row" gap={2}>
-          <text fg="#a29bfe">Context:</text>
-          <text>
-            {formatNumber(contextData()!.tokens)} / {formatNumber(contextData()!.limit)} ({formatPercent(contextData()!.percent)})
-          </text>
+    <Show when={contextData()} keyed>
+      {(data: ContextData) => (
+        <box flexDirection="column" gap={0}>
+          <box flexDirection="row" gap={2}>
+            <text fg="#a29bfe">Context:</text>
+            <text>
+              {formatNumber(data.tokens)} / {formatNumber(data.limit)} ({formatPercent(data.percent)})
+            </text>
+          </box>
+          <ProgressBar value={data.percent} color="#a29bfe" width={20} />
         </box>
-        <ProgressBar value={contextData()!.percent} color="#a29bfe" width={20} />
-      </box>
+      )}
     </Show>
   );
 }

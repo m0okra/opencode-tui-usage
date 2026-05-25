@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import type { JSX } from "solid-js";
 import { createSignal, createEffect, Show, For } from "solid-js";
-import { Title, ProgressBar } from "./components.jsx";
+import { ProgressBar } from "./components.jsx";
 import { formatNumber, formatCost } from "./formatters.js";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { AssistantMessage } from "@opencode-ai/sdk/v2";
@@ -131,8 +131,6 @@ export function TokensUsageView(props: TokensUsageViewProps): JSX.Element {
 
   return (
     <box flexDirection="column" gap={0}>
-      <Title text="Usage Tokens" color="#a29bfe" />
-
       <Show when={isLoading()}>
         <text fg="#888">...</text>
       </Show>
