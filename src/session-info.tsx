@@ -4,7 +4,7 @@ import type { JSX } from "solid-js";
 import { createSignal, createEffect, Show } from "solid-js";
 import { TreeItem, ProgressBar } from "./components.jsx";
 import { formatNumber, formatPercent } from "./formatters.js";
-import { findLastAssistantMessage } from "./utils.js";
+import { cachedSignal, findLastAssistantMessage } from "./utils.js";
 
 /** 会话信息数据结构 */
 interface SessionData {
@@ -32,8 +32,8 @@ export function SessionInfoView(props: {
   api: TuiPluginApi;
   sessionId: string;
 }): JSX.Element {
-  const [data, setData] = createSignal<SessionData | null>(null);
-  const [contextInfo, setContextInfo] = createSignal<ContextInfo | null>(null);
+  const [data, setData] = cachedSignal<SessionData | null>("session.data", null);
+  const [contextInfo, setContextInfo] = cachedSignal<ContextInfo | null>("session.context", null);
 
   // 主数据抽取
   createEffect(() => {

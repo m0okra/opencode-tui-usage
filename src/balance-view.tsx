@@ -4,15 +4,13 @@ import { createSignal, createEffect, onCleanup, Show } from "solid-js";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { BalanceData } from "./quota/types.js";
 import { formatDuration } from "./formatters.js";
-import { findLastAssistantMessage } from "./utils.js";
+import { cachedSignal, findLastAssistantMessage } from "./utils.js";
 
 /** 余额刷新间隔（秒） */
 const REFRESH_INTERVAL = 60;
 
 /** 模块级上次刷新时间戳，组件重挂载时避免重复刷新 */
 let lastRefreshTime = 0;
-/** 模块级缓存最近一次余额数据，重挂载时直接恢复 */
-let lastBalanceData: BalanceData | null = null;
 
 export interface BalanceViewProps {
   quotaService: {
@@ -31,7 +29,7 @@ export interface BalanceViewProps {
  * 仅当当前 Provider 支持余额查询时显示
  */
 export function BalanceView(props: BalanceViewProps): JSX.Element {
-  const [balance, setBalance] = createSignal<BalanceData | null>(lastBalanceData);
+  const [balance, setBalance] = cachedSignal<BalanceData | null>("balance.data", null);
   const [loading, setLoading] = createSignal(false);
   const [currentProvider, setCurrentProvider] = createSignal<string | null>(null);
   const [hasBalance, setHasBalance] = createSignal(false);
@@ -126,7 +124,6 @@ export function BalanceView(props: BalanceViewProps): JSX.Element {
     props.quotaService.fetchBalance().then((data) => {
       if (requestId !== currentRequestId) return;
       if (data) {
-        lastBalanceData = data;
         setBalance(data);
       }
       setLoading(false);

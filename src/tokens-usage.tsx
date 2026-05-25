@@ -3,6 +3,7 @@ import type { JSX } from "solid-js";
 import { createSignal, createEffect, Show, For } from "solid-js";
 import { TreeItem } from "./components.jsx";
 import { formatNumber, formatCost } from "./formatters.js";
+import { cachedSignal } from "./utils.js";
 import type { TuiPluginApi } from "@opencode-ai/plugin/tui";
 import type { AssistantMessage } from "@opencode-ai/sdk/v2";
 
@@ -30,16 +31,16 @@ export interface TokensUsageViewProps {
  * 按模型分组显示累计数据
  */
 export function TokensUsageView(props: TokensUsageViewProps): JSX.Element {
-  const [stats, setStats] = createSignal<TokenStats[]>([]);
-  const [totals, setTotals] = createSignal<{
+  const [stats, setStats] = cachedSignal<TokenStats[]>("tokens.stats", []);
+  const [totals, setTotals] = cachedSignal<{
     input: number;
     output: number;
     reasoning: number;
     cacheRead: number;
     cacheWrite: number;
     cost: number;
-  } | null>(null);
-  const [isLoading, setIsLoading] = createSignal(true);
+  } | null>("tokens.totals", null);
+  const [isLoading, setIsLoading] = cachedSignal<boolean>("tokens.loading", true);
 
   createEffect(() => {
     const sessionId = props.sessionId;
