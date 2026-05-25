@@ -12,6 +12,8 @@ const REFRESH_INTERVAL = 60;
 
 /** 模块级上次刷新时间戳，组件重挂载时避免重复刷新 */
 let lastRefreshTime = 0;
+/** 模块级缓存最近一次额度数据，重挂载时直接恢复，避免空状态闪烁 */
+let lastQuotaResult: QuotaResult | null = null;
 
 export interface UsageViewProps {
   quotaService: {
@@ -68,8 +70,8 @@ function EmptyState(props: EmptyStateProps): JSX.Element {
  * 显示 Rolling/Weekly/Monthly 三种维度的额度使用情况
  */
 export function UsageView(props: UsageViewProps): JSX.Element {
-  const [result, setResult] = createSignal<QuotaResult | null>(null);
-  const [loading, setLoading] = createSignal(true);
+  const [result, setResult] = createSignal<QuotaResult | null>(lastQuotaResult);
+  const [loading, setLoading] = createSignal(!lastQuotaResult);
   const [currentProvider, setCurrentProvider] = createSignal<string | null>(null);
   const [currentModel, setCurrentModel] = createSignal<string | null>(null);
   const [refreshCountdown, setRefreshCountdown] = createSignal(REFRESH_INTERVAL);
@@ -111,9 +113,11 @@ export function UsageView(props: UsageViewProps): JSX.Element {
     props.quotaService.fetchQuota().then((data) => {
       if (requestId !== currentRequestId) return;
       if (data && data.quota) {
+        lastQuotaResult = data;
         setResult(data);
         setFetchError(null);
       } else {
+        lastQuotaResult = null;
         setResult(null);
         setFetchError("Provider returned no quota data");
       }
@@ -122,6 +126,7 @@ export function UsageView(props: UsageViewProps): JSX.Element {
       if (requestId !== currentRequestId) return;
       console.error("[UsageView] Failed to fetch quota:", error);
       setFetchError(String(error));
+      lastQuotaResult = null;
       setResult(null);
       setLoading(false);
     });
