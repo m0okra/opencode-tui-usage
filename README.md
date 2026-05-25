@@ -6,9 +6,10 @@ OpenCode TUI 插件，在侧边栏显示用量和额度信息，支持多额度 
 
 ## 功能特性
 
-- 📊 实时显示 Rolling / Weekly / Monthly 三种维度的额度使用情况
-- 🎨 彩色标签：Rolling(绿) / Weekly(黄) / Monthly(蓝)
-- 📈 进度条可视化展示使用比例
+- 📊 支持 plan 型与按量计费型两种 provider
+- 💰 余额展示（按量计费 provider，如 DeepSeek）
+- 📈 额度展示（plan 型 provider，进度条 + rolling/weekly/monthly）
+- 🎨 树线风格展示 Session / Token 用量信息
 - 🔄 自动根据当前会话的 provider 切换数据源
 - 🛠️ 支持扩展新的 provider 适配器
 
@@ -86,6 +87,28 @@ export OPENCODE_GO_AUTH_COOKIE="your-cookie"
 export OPENCODE_GO_WORKSPACE_ID="wrk_xxxxxxxxxxxx"
 ```
 
+### DeepSeek
+
+适用于 `providerID` 为 `deepseek` 的按量计费会话。
+
+在 `~/.config/opencode/usage.provider.json` 中添加：
+
+```json
+{
+  "providers": {
+    "deepseek": {
+      "apiKey": "{env:DEEPSEEK_API_KEY}"
+    }
+  }
+}
+```
+
+设置环境变量：
+
+```bash
+export DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
 ### 获取 OpenCode-Go 配置
 
 1. 登录 https://opencode.ai
@@ -115,22 +138,34 @@ npm run dev
 ```
 src/
 ├── tui.tsx              # 插件入口，注册 sidebar_content slot
-├── usage.tsx            # Usage 组件（彩色标签 + 进度条）
-├── session-info.tsx     # Session Info 组件
-├── components.tsx       # 可复用组件
-└── quota/               # 额度服务
-    ├── types.ts         # QuotaData, QuotaResult 类型定义
-    ├── provider.ts      # QuotaProvider 接口
-    ├── service.ts       # QuotaService 管理多 provider
+├── formatters.ts        # 格式化工具
+├── components.tsx       # 可复用组件 (TreeItem, Collapsible, ProgressBar)
+├── balance-view.tsx     # 余额展示组件（按量计费）
+├── usage.tsx            # 额度展示组件（plan 型）
+├── session-info.tsx     # Session 组件（含 Context 合并）
+├── tokens-usage.tsx     # Token 统计组件（树线展示）
+├── index.ts             # 重新导出
+└── quota/               # 额度/余额服务
+    ├── types.ts         # QuotaData, BalanceData 类型定义
+    ├── provider.ts      # QuotaProvider + BalanceProvider 接口
+    ├── service.ts       # QuotaService 多 provider 管理
     ├── config.ts        # 读取 usage.provider.json
-    └── providers/      # provider 适配器
+    └── providers/       # provider 适配器
         ├── minimax.ts
-        └── opencode-go.ts
+        ├── opencode-go.ts
+        └── deepseek.ts  # 按量计费（Balance + Quota 双接口）
 ```
 
 ## 添加新的 Provider 适配器
 
-如果需要支持新的额度来源（如其他 AI provider），按以下流程添加：
+支持两种类型的 provider：
+
+| 类型 | 接口 | 适用场景 | 展示组件 |
+|------|------|----------|----------|
+| **Quota (额度)** | `QuotaProvider` | plan 型（coding plan / token plan） | `UsageView`（进度条 + rolling/weekly/monthly） |
+| **Balance (余额)** | `BalanceProvider` | 按量计费（pay-as-you-go） | `BalanceView`（余额数值） |
+
+一个 provider 可以同时实现两个接口（如 DeepSeek 无 plan quota 但提供余额查询）。
 
 ### 1. 抓包获取 API
 
@@ -158,59 +193,75 @@ curl -s 'https://example.com/api/quota' \
 
 ### 3. 分析响应结构
 
-运行精简后的 curl，分析响应 JSON，找到需要的数据字段：
+运行精简后的 curl，将响应字段映射到对应数据结构：
 
-- 哪些字段对应 Rolling / Weekly / Monthly 的已用量和总量？
-- 哪些字段包含重置倒计时？
-- 是否有业务状态码需要检查？
-
-将响应中的字段映射到 `QuotaData` 结构：
+**QuotaData（plan 型）：**
 
 | 响应字段 | QuotaData 字段 | 说明 |
 |----------|---------------|------|
-| `xxx.total` / `xxx.used` | `rolling.usage` | 计算百分比：`used / total * 100` |
+| `xxx.total` / `xxx.used` | `rolling.usage` | 计算百分比 |
 | `xxx.reset_time` | `rolling.reset` | 用 `formatDurationCompact()` 格式化 |
-| ... | ... | ... |
+
+**BalanceData（按量计费型）：**
+
+| 响应字段 | BalanceData 字段 | 说明 |
+|----------|-----------------|------|
+| `xxx.total_balance` | `totalBalance` | 总余额 |
+| `xxx.currency` | `currency` | 币种 |
 
 ### 4. 编写适配器
 
-在 `src/quota/providers/` 下创建 `{provider-name}.ts`，参考已有适配器实现：
+在 `src/quota/providers/` 创建 `{name}.ts`。
+
+**Plan 型（实现 `QuotaProvider`）：** 参考 `minimax.ts`、`opencode-go.ts`。
 
 ```typescript
 import type { QuotaData, ProviderConfig } from "../types.js";
 import { QuotaProvider, resolveEnvVar } from "../provider.js";
-import { formatDurationCompact } from "../../formatters.js";
 
 export class MyQuotaProvider implements QuotaProvider {
-  readonly name = "my-provider";  // 与 usage.provider.json 中的 key 对应
+  readonly name = "my-provider";
   private apiKey: string | undefined;
 
   init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
-    // 读取 config 并解析环境变量
     this.apiKey = resolveEnvVar(config.apiKey as string | undefined);
   }
 
   async fetchQuota(): Promise<QuotaData | null> {
-    if (!this.apiKey) {
-      console.warn("[MyQuotaProvider] Missing apiKey");
-      return null;
-    }
+    // 调用 API 并映射为 QuotaData（rolling/weekly/monthly）
+  }
+}
+```
 
-    // 用 fetch 调用精简后的 API
-    // 检查 HTTP 状态码和业务状态码
-    // 将响应映射为 QuotaData 返回
+**按量计费型（实现 `BalanceProvider`）：** 参考 `deepseek.ts`。
+
+```typescript
+import type { BalanceData, QuotaData, ProviderConfig } from "../types.js";
+import { QuotaProvider, BalanceProvider, resolveEnvVar } from "../provider.js";
+
+export class MyBalanceProvider implements QuotaProvider, BalanceProvider {
+  readonly name = "my-provider";
+
+  init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
+    this.apiKey = resolveEnvVar(config.apiKey as string | undefined);
+  }
+
+  // QuotaProvider：无 plan quota 时返回 null
+  async fetchQuota(): Promise<QuotaData | null> { return null; }
+
+  // BalanceProvider：返回余额数据
+  async fetchBalance(): Promise<BalanceData | null> {
+    // 调用 API 并映射为 BalanceData
   }
 }
 ```
 
 ### 5. 注册到 QuotaService
 
-在 `src/quota/service.ts` 中导入并注册：
+在 `src/quota/service.ts` 构造函数中注册：
 
 ```typescript
 import { MyQuotaProvider } from "./providers/my-provider.js";
-
-// 在 constructor 中添加：
 this.registerProvider(new MyQuotaProvider());
 ```
 
@@ -237,7 +288,7 @@ this.registerProvider(new MyQuotaProvider());
 查看插件日志：
 
 ```bash
-cat ~/.local/share/opencode/log/$(ls -t ~/.local/share/opencode/log/ | head -1) | grep -i "tui.plugin\|QuotaService\|MiniMaxCN\|OpenCodeGo"
+cat ~/.local/share/opencode/log/$(ls -t ~/.local/share/opencode/log/ | head -1) | grep -i "tui.plugin\|error\|QuotaService\|DeepSeek"
 ```
 
 常见问题：

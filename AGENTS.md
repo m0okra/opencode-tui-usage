@@ -8,20 +8,21 @@ OpenCode TUI 插件，在侧边栏显示用量和额度信息，支持多额度 
 src/
 ├── tui.tsx              # 插件入口，注册 sidebar_content slot
 ├── formatters.ts         # 格式化工具 (formatNumber, formatCost, formatDuration)
-├── components.tsx         # 通用 UI 组件 (LabelValue, Title, ProgressBar)
-├── usage.tsx             # Usage Quota 组件
-├── session-info.tsx     # Session Info 组件
-├── context-usage.tsx    # Context 使用组件 (最新消息 tokens / limit)
-├── tokens-usage.tsx      # Token 统计组件 (累计 per-model 统计)
+├── components.tsx         # 通用 UI 组件 (LabelValue, Title, ProgressBar, Collapsible, TreeItem)
+├── balance-view.tsx     # Balance 余额组件（按量计费 provider）
+├── usage.tsx             # Usage Quota 组件（plan 型 provider）
+├── session-info.tsx     # Session Info 组件（含 Context 合并展示）
+├── tokens-usage.tsx      # Token 统计组件 (累计 per-model 统计，树线展示)
 ├── index.ts             # 重新导出 tui
-└── quota/              # 额度服务 (QuotaProvider 架构)
-    ├── types.ts
-    ├── provider.ts      # QuotaProvider 接口
-    ├── service.ts       # QuotaService 管理多 provider
-    ├── config.ts
+└── quota/              # 额度/余额服务
+    ├── types.ts          # QuotaData, BalanceData, QuotaResult 类型定义
+    ├── provider.ts       # QuotaProvider + BalanceProvider 接口
+    ├── service.ts        # QuotaService 管理多 provider
+    ├── config.ts         # 读取 usage.provider.json
     └── providers/
         ├── minimax.ts
-        └── opencode-go.ts
+        ├── opencode-go.ts
+        └── deepseek.ts   # 按量计费（同时实现 QuotaProvider + BalanceProvider）
 ```
 
 ## 技术要求
@@ -58,6 +59,8 @@ if (msgContextTokens > 0 && msgTime > latestContextTokensTime) {
 }
 ```
 
+Context 数据展示在 Session 面板最后一位，带进度条，缩进与文本对齐。
+
 ## 开发命令
 
 ```bash
@@ -71,13 +74,22 @@ npm run dev   # 监听模式
 
 ```
 sidebar_content slot 顺序:
-1. UsageView (Usage Quota)
-2. SessionInfoView (Session)
-3. ContextUsageView (Context)     ← 新会话信息下方
+1. BalanceView (Balance)          ← 按量计费 provider 的余额
+2. UsageView (Usage Quota)        ← plan 型 provider 的额度（按量计费时自动隐藏）
+3. SessionInfoView (Session)      ← 含 Context 合并展示
 4. TokensUsageView (Usage Tokens)
 ```
 
 ## 添加新 Provider 适配器
+
+支持两种类型的 provider：
+
+| 类型 | 接口 | 适用场景 | 展示组件 |
+|------|------|----------|----------|
+| **Quota (额度)** | `QuotaProvider` | plan 型（coding plan / token plan） | `UsageView`（进度条 + rolling/weekly/monthly） |
+| **Balance (余额)** | `BalanceProvider` | 按量计费（pay-as-you-go） | `BalanceView`（余额数值） |
+
+一个 provider 可以同时实现两个接口（如 DeepSeek 无 plan quota 但提供余额查询）。
 
 ### 1. 抓包获取 API
 
@@ -98,16 +110,68 @@ curl -s 'https://example.com/api/quota' \
 
 ### 3. 分析响应结构
 
-运行精简后的 curl，将响应字段映射到 `QuotaData`：
+运行精简后的 curl，将响应字段映射到对应数据结构：
+
+**QuotaData（plan 型）：**
 
 | 响应字段 | QuotaData 字段 | 说明 |
 |----------|---------------|------|
 | `xxx.total` / `xxx.used` | `rolling.usage` | 计算百分比 |
 | `xxx.reset_time` | `rolling.reset` | 用 `formatDurationCompact()` 格式化 |
 
+**BalanceData（按量计费型）：**
+
+| 响应字段 | BalanceData 字段 | 说明 |
+|----------|-----------------|------|
+| `xxx.total_balance` | `totalBalance` | 总余额 |
+| `xxx.currency` | `currency` | 币种 |
+
 ### 4. 编写适配器
 
-在 `src/quota/providers/` 创建 `{name}.ts`，实现 `QuotaProvider` 接口，`name` 必须与 `usage.provider.json` 中的 key 匹配。参考已有适配器 `minimax.ts`、`opencode-go.ts`。
+在 `src/quota/providers/` 创建 `{name}.ts`。
+
+**Plan 型（实现 `QuotaProvider`）：** 参考 `minimax.ts`、`opencode-go.ts`。
+
+```typescript
+import type { QuotaData, ProviderConfig } from "../types.js";
+import { QuotaProvider, resolveEnvVar } from "../provider.js";
+
+export class MyQuotaProvider implements QuotaProvider {
+  readonly name = "my-provider";  // 与 usage.provider.json 中的 key 对应
+  private apiKey: string | undefined;
+
+  init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
+    this.apiKey = resolveEnvVar(config.apiKey as string | undefined);
+  }
+
+  async fetchQuota(): Promise<QuotaData | null> {
+    // 调用 API 并映射为 QuotaData（rolling/weekly/monthly）
+  }
+}
+```
+
+**按量计费型（实现 `BalanceProvider`）：** 参考 `deepseek.ts`。
+
+```typescript
+import type { BalanceData, QuotaData, ProviderConfig } from "../types.js";
+import { QuotaProvider, BalanceProvider, resolveEnvVar } from "../provider.js";
+
+export class MyBalanceProvider implements QuotaProvider, BalanceProvider {
+  readonly name = "my-provider";
+
+  init(config: ProviderConfig, _credentials: Record<string, unknown>): void {
+    this.apiKey = resolveEnvVar(config.apiKey as string | undefined);
+  }
+
+  // QuotaProvider：无 plan quota 时返回 null
+  async fetchQuota(): Promise<QuotaData | null> { return null; }
+
+  // BalanceProvider：返回余额数据
+  async fetchBalance(): Promise<BalanceData | null> {
+    // 调用 API 并映射为 BalanceData
+  }
+}
+```
 
 ### 5. 注册到 QuotaService
 
@@ -249,7 +313,8 @@ npm version patch && git push origin v0.0.x
 - 最小接口：`name` + `init()` + `fetchQuota()`
 - `name` 必须与配置 key 匹配
 - `init()` 接收配置，存储认证信息
-- `fetchQuota()` 返回 `QuotaData | null`
+- `fetchQuota()` 返回 `QuotaData | null`（balance-only provider 返回 null）
+- `fetchBalance()` 可选，返回 `BalanceData | null`（适用于按量计费）
 
 **环境变量引用**
 - 配置文件的值支持两种环境变量格式，推荐使用 `{env:VAR}` 与 OpenCode 配置语法保持一致：
