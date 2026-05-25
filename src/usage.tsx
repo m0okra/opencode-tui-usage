@@ -10,6 +10,9 @@ import { findLastAssistantMessage } from "./utils.js";
 /** 额度刷新间隔（秒） */
 const REFRESH_INTERVAL = 60;
 
+/** 模块级上次刷新时间戳，组件重挂载时避免重复刷新 */
+let lastRefreshTime = 0;
+
 export interface UsageViewProps {
   quotaService: {
     fetchQuota(): Promise<QuotaResult | null>;
@@ -82,6 +85,7 @@ export function UsageView(props: UsageViewProps): JSX.Element {
     const providerID = currentProvider();
     if (!providerID) return;
 
+    lastRefreshTime = Date.now();
     const requestId = ++currentRequestId;
 
     setLoading(true);
@@ -155,6 +159,7 @@ export function UsageView(props: UsageViewProps): JSX.Element {
   });
 
   // Effect 2: 监听 provider 变化，触发额度获取
+  // 组件重挂载时 lastRefreshTime 仍保留，跳过非必要的刷新
   createEffect(() => {
     const providerID = currentProvider();
 
@@ -166,12 +171,20 @@ export function UsageView(props: UsageViewProps): JSX.Element {
       return;
     }
 
+    // 如果上次刷新在 interval 内，说明是组件重挂载，跳过刷新
+    if (Date.now() - lastRefreshTime < REFRESH_INTERVAL * 1000) {
+      return;
+    }
+
     doRefresh();
   });
 
   // Effect 3: 倒计时定时器，归零时触发刷新
   createEffect(() => {
-    setRefreshCountdown(REFRESH_INTERVAL);
+    // 根据上次刷新时间恢复倒计时，避免组件重挂载时重置
+    const elapsed = Math.floor((Date.now() - lastRefreshTime) / 1000);
+    setRefreshCountdown(Math.max(0, REFRESH_INTERVAL - elapsed));
+
     const id = setInterval(() => {
       setRefreshCountdown((r) => {
         if (r <= 1) {
