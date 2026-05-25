@@ -2,6 +2,30 @@
 
 OpenCode TUI 插件，在侧边栏显示用量和额度信息，支持多额度 provider。
 
+## 🤖 Agent 快速安装
+
+把下面这段提示词发给你的 AI 编码代理（OpenCode 等），即可自动完成安装和配置：
+
+> 给用户安装 opencode-tui-usage 插件（@yinxe/opencode-tui-usage）。
+> 
+> 步骤：
+> 1. 在 `~/.config/opencode/tui.json` 的 `"plugin"` 数组中添加 `"@yinxe/opencode-tui-usage@latest"`
+> 2. 如果文件不存在，创建它：
+>    ```json
+>    {
+>      "$schema": "https://opencode.ai/tui.json",
+>      "plugin": ["@yinxe/opencode-tui-usage@latest"]
+>    }
+>    ```
+> 3. 根据用户使用的 AI provider 设置对应的环境变量（任选其一或多个）：
+>    - **DeepSeek**：`export DEEPSEEK_API_KEY="sk-xxxxx"`
+>    - **MiniMax**：`export MINIMAX_API_KEY="your-key"`
+>    - **OpenCode Go**：`export OPENCODE_GO_AUTH_COOKIE="cookie"` 和 `export OPENCODE_GO_WORKSPACE_ID="wrk_xxx"`
+> 4. 重启 OpenCode
+> 5. 打开一个会话，在侧边栏查看用量信息
+
+> **提示**：本插件已内置环境变量保底支持。即使不创建 `usage.provider.json` 配置文件，只要设置了上述约定的环境变量就能工作。
+
 ## 项目结构
 
 ```
@@ -332,6 +356,17 @@ npm version patch && git push origin v0.0.x
   ```typescript
   this.apiKey = resolveEnvVar(config.apiKey as string | undefined);
   ```
+- **保底支持**：每个 provider 都有约定的环境变量名称。即使 `usage.provider.json` 中未配置该 provider，只要设置了约定环境变量就能工作：
+  ```typescript
+  // 配置文件中未取到 → 尝试约定环境变量保底
+  this.apiKey = resolveEnvVar(config.apiKey) ?? process.env.DEEPSEEK_API_KEY;
+  ```
+
+| Provider | 保底环境变量 |
+|----------|-------------|
+| DeepSeek | `DEEPSEEK_API_KEY` |
+| MiniMax | `MINIMAX_API_KEY` |
+| OpenCode-Go | `OPENCODE_GO_AUTH_COOKIE` + `OPENCODE_GO_WORKSPACE_ID` |
 
 ### 命名规范
 
