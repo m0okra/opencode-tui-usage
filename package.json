@@ -2,7 +2,10 @@
   "name": "@yinxe/opencode-tui-usage",
   "version": "1.0.4",
   "description": "OpenCode TUI 额度显示插件 - 在侧边栏显示用量和额度信息",
-  "repository": "github:Yinxe/opencode-tui-usage",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yinxe/opencode-tui-usage.git"
+  },
   "type": "module",
   "oc-plugin": [
     "tui"
